@@ -6,10 +6,6 @@ ifeq ($(strip $(DEVKITPRO)),)
 $(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/devkitpro")
 endif
 
-export PKG_CONFIG_PATH = /opt/devkitpro/portlibs/ppc/lib/pkgconfig:/opt/devkitpro/portlibs/wiiu/lib/pkgconfig/
-# check out SDL and build to get  SDL touch support for WiiU
-#export PKG_CONFIG_PATH = /project/SDL_wiiu_install/lib/pkgconfig/
-
 TOPDIR ?= $(CURDIR)
 
 include $(DEVKITPRO)/wut/share/wut_rules
@@ -21,45 +17,44 @@ include $(DEVKITPRO)/wut/share/wut_rules
 # DATA is a list of directories containing data files
 # INCLUDES is a list of directories containing header files
 #-------------------------------------------------------------------------------
-
 TARGET		:=	sdl_oneko_wiiu
-BUILD		:= 	build
-SOURCES		:=	. 
-
-SOURCE_FILES	:=	
-
-INCLUDES	:=	. \
-			.. 
-				
+BUILD		:=	build
+SOURCES		:=	. ../sdl
 
 #-------------------------------------------------------------------------------
 # options for code generation
 #-------------------------------------------------------------------------------
 
-CFLAGS	:=	-O3 -ffunction-sections -fdata-sections \
-			$(MACHDEP)
+CPPFLAGS :=			\
+	$(INCLUDE)		\
+	-D__WIIU__		\
+	-D__WUT__		\
+	-DBIGENDIAN		\
+	-Dmain=real_main
 
-CFLAGS	+=	$(INCLUDE) -D__WIIU__ -D__WUT__ -DBIGENDIAN -DUSE_MBEDTLS
+CFLAGS :=			\
+	-O2			\
+	-ffunction-sections	\
+	-fdata-sections		\
+	$(MACHDEP)
 
-CXXFLAGS	:= $(CFLAGS)
+CXXFLAGS := $(CFLAGS)
 
-ASFLAGS	:=	$(ARCH)
-LDFLAGS	=	$(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map)
-
-LIBS	:=  -lwut 
+ASFLAGS	:= $(ARCH)
+LDFLAGS	= $(ARCH) $(RPXSPECS)
 
 #-------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level
 # containing include and lib
 #-------------------------------------------------------------------------------
-LIBDIRS	:= $(PORTLIBS) $(WUT_ROOT) 
+LIBDIRS	:= $(WUT_ROOT)
 
 #---------------------------------------------------------------------------------
 # SDL libraries
 #---------------------------------------------------------------------------------
 # Minimal libraries to check if your environement is configured
 #PKGCONF	:=	$(DEVKITPRO)/portlibs/ppc/bin/powerpc-eabi-pkg-config
-PKGCONF	:=	$(DEVKITPRO)/portlibs/wiiu/bin/powerpc-eabi-pkg-config
+PKGCONF		:=	powerpc-eabi-pkg-config
 SDL_CFLAGS	:=	$(shell $(PKGCONF) --cflags sdl2)
 SDL_LDFLAGS	:=	$(shell $(PKGCONF) --libs sdl2)
 CFLAGS		+=	$(SDL_CFLAGS)
@@ -90,8 +85,7 @@ export OUTPUT	:=	$(CURDIR)/$(TARGET)
 export TOPDIR	:=	$(CURDIR)
 
 export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
-			$(foreach dir,$(DATA),$(CURDIR)/$(dir)) \
-			$(foreach sf,$(SOURCE_FILES),$(CURDIR)/$(dir $(sf)))
+			$(foreach dir,$(DATA),$(CURDIR)/$(dir))
 
 export DEPSDIR	:=	$(CURDIR)/$(BUILD)
 
@@ -139,7 +133,6 @@ clean:
 	@echo clean ...
 	@rm -fr $(BUILD) $(TARGET).rpx $(TARGET).elf $(TARGET).wuhb
 
-
 #-------------------------------------------------------------------------------
 else
 .PHONY:	all
@@ -171,3 +164,6 @@ $(OFILES_SRC)	: $(HFILES_BIN)
 endif
 #-------------------------------------------------------------------------------
 
+.PHONY: run
+run: all
+	WIILOAD=tcp:wiiu wiiload $(OUTPUT).wuhb

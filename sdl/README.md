@@ -12,11 +12,8 @@ I attempted to preserve as much of the original code as possible.
 
 ### Building
 
-Build system is not used because there is only one source file that includes all headers. The command below produces `sdl_oneko` executable.
-
 ```
- ./patch.sh
- gcc sdl_oneko.c sdl_xbm_helper.c -o sdl_oneko `pkg-config --cflags --libs sdl2` -I. -I..
+ make
 ```
 
 ### Usage

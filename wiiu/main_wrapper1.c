@@ -19,39 +19,13 @@ with this wrapper.
   Step 4: Build myapp_main as a library or just link it in here.
 */
 
-#include <coreinit/thread.h>
-#include <sysapp/launch.h>
-#include <whb/log.h>
-#include <whb/proc.h>
+#include <sysapp/title.h>       // SYSCheckTitleExists()
 
-int myapp_main(int my_argc, char** my_argv);
+int real_main(int argc, char** argv);
+
+#undef main
 
 int main(int argc, char** argv) {
-    WHBProcInit();
-
-    // Step 3: construct args you app needs
-    const char* buffer = "Some argv input from the user";
-    char* my_argv[] = {
-        "myapp",  // argv[0] is the program name.
-        (char*)buffer,   //(char *)filename,
-        NULL      // argv must be NULL-terminated.
-    };
-    int my_argc = 2;  // Number of arguments in my_argv
-
-    // ----- Step 4: call your main code here
-    myapp_main(my_argc, my_argv);
-    // -----
-
-    // To quit cleanly and return to the system window
-    int quit = 1;
-    while (WHBProcIsRunning()) {
-        // for instance, user selected "quit" from a menu
-        // you need to implement the quit.
-        if (quit) {
-            SYSLaunchMenu();  // will cause WHBProcIsRunning() to return
-                              // false
-        }
-    }
-
-    return 0;
+    SYSCheckTitleExists(0); // workaround for SDL bug
+    return real_main(argc, argv);
 }

@@ -1,9 +1,8 @@
-# WiiU patcher and wrapper for SDL app
+# WiiU wrapper for SDL app
 
 ##  Build
 
 ```
-./patch.sh
 make
 ```
 

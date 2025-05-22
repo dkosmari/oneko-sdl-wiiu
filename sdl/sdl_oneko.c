@@ -6,10 +6,12 @@
 #include <stdio.h>
 #include <stdlib.h>  
 
-#include "oneko_no_x.h"
-#include "sdl_xbm_helper.h"
+#ifdef __WIIU__
+#include <sysapp/launch.h>
+#endif
 
-// PATCH_HINT_ExtraIncludes
+#include "sdl_oneko.h"
+#include "sdl_xbm_helper.h"
 
 /*
  * グローバル変数
@@ -204,9 +206,6 @@ int NekoMoveDy;            /* 猫移動距離Ｙ */
 int NekoLastX;             /* 猫最終描画Ｘ座標 */
 int NekoLastY;             /* 猫最終描画Ｙ座標 */
 
-SDL_GameController* gGameController = NULL;
-
-
 // Define sine values for directional calculations (from original oneko.c)
 #define PI              3.14159265358979323846
 #define SinPiPer8       0.38268343236508977173
@@ -258,7 +257,7 @@ SDL_Surface* create_surface_from_xbm(const unsigned char* xbm_data, int width, i
 
 // Forward declarations for SDL port functions
 int InitScreen(char *DisplayName, SDL_Window** window, SDL_Renderer** renderer);
-void ProcessEvent(SDL_Event* e, int* quit);
+void ProcessEvent(int* quit);
 void ProcessNeko(SDL_Renderer* renderer);
 void DeInitAll(SDL_Window* window, SDL_Renderer* renderer); // Forward declaration for deinitialization function
 
@@ -766,58 +765,71 @@ int InitScreen(char *DisplayName, SDL_Window** window, SDL_Renderer** renderer) 
  *      イベント処理
  */
 
-void ProcessEvent(SDL_Event* e, int* quit) {
+void ProcessEvent(int* quit) {
+    SDL_Event e;  // Local event structure
+
     // Process all pending events in the event queue
-    while (SDL_PollEvent(e) != 0) {
-        // If the user closes the window (e.g., clicks the 'X' button)
-        if (e->type == SDL_QUIT) {
-            *quit = 1; // Set the quit flag to exit the main loop
-             printf("Quit event received.\n");
-            // PATCH_HINT_Sdl_Quit
-        }
-        // Handle window resize events
-        else if (e->type == SDL_WINDOWEVENT) {
-            if (e->window.event == SDL_WINDOWEVENT_RESIZED) {
-                WindowWidth = e->window.data1;
-                WindowHeight = e->window.data2;
-                printf("Window resized to: %dx%d\n", WindowWidth, WindowHeight);
-            }
-        }
-        // Handle mouse motion events
-        else if (e->type == SDL_MOUSEMOTION) {
-            MouseX = e->motion.x;
-            MouseY = e->motion.y;
-        }
-        // Handle touchscreen finger events
-        else if (e->type == SDL_FINGERDOWN || e->type == SDL_FINGERMOTION) {
-            // Scale normalized touch coordinates to window dimensions
-            MouseX = (int)(e->tfinger.x * WindowWidth);
-            MouseY = (int)(e->tfinger.y * WindowHeight);
-        }
-        // Handle game controller button events
-        else if (e->type == SDL_CONTROLLERBUTTONDOWN) {
-            if (e->cbutton.button == SDL_CONTROLLER_BUTTON_BACK) {
-                // This is the Minus button on the Wii U GamePad
-                printf("Minus button pressed! Quitting application.\n");
-                *quit = 1; // Set quit flag to exit the main loop
-            }
-        }
-        // Handle game controller device added/removed events
-        else if (e->type == SDL_CONTROLLERDEVICEADDED) {
+    while (SDL_PollEvent(&e)) {
+        switch (e.type) {
+            // If the user closes the window (e.g., clicks the 'X' button)
+            case SDL_QUIT:
+                *quit = 1; // Set the quit flag to exit the main loop
+                printf("Quit event received.\n");
+                break;
+
+            // Handle window resize events
+            case SDL_WINDOWEVENT:
+                if (e.window.event == SDL_WINDOWEVENT_RESIZED) {
+                    WindowWidth = e.window.data1;
+                    WindowHeight = e.window.data2;
+                    printf("Window resized to: %dx%d\n", WindowWidth, WindowHeight);
+                }
+                break;
+
+            // Handle mouse motion events
+            case SDL_MOUSEMOTION:
+                MouseX = e.motion.x;
+                MouseY = e.motion.y;
+                break;
+                
+            // Handle touchscreen finger events
+            case SDL_FINGERDOWN:
+            case SDL_FINGERMOTION:
+                // Scale normalized touch coordinates to window dimensions
+                MouseX = (int)(e.tfinger.x * WindowWidth);
+                MouseY = (int)(e.tfinger.y * WindowHeight);
+                break;
+                
+            // Handle game controller button events
+            case SDL_CONTROLLERBUTTONDOWN:
+                if (e.cbutton.button == SDL_CONTROLLER_BUTTON_BACK) {
+                    // This is the Minus button on the Wii U GamePad
+                    printf("Minus button pressed! Quitting application.\n");
+#ifdef __WIIU__
+                    SYSLaunchMenu(); // cause a SDL_QUIT to be generated.
+#else
+                    *quit = 1; // Set quit flag to exit the main loop
+#endif
+                }
+                break;
+                
             // Open the newly added controller
-            gGameController = SDL_GameControllerOpen(e->cdevice.which);
-            if (gGameController) {
-                printf("Game Controller Added: %s\n", SDL_GameControllerName(gGameController));
-            } else {
-                fprintf(stderr, "Could not open game controller: %s\n", SDL_GetError());
+            case SDL_CONTROLLERDEVICEADDED: {
+                SDL_GameController* c = SDL_GameControllerOpen(e.cdevice.which);
+                if (c) {
+                    printf("Game Controller Added: %s\n", SDL_GameControllerName(c));
+                } else {
+                    fprintf(stderr, "Could not open game controller: %s\n", SDL_GetError());
+                }
+                break;
             }
-        }
-        else if (e->type == SDL_CONTROLLERDEVICEREMOVED) {
-            // Check if the removed controller is the one we are tracking
-            if (gGameController && SDL_GameControllerGetJoystick(gGameController) == SDL_JoystickFromInstanceID(e->cdevice.which)) {
-                printf("Game Controller Removed.\n");
-                SDL_GameControllerClose(gGameController);
-                gGameController = NULL;
+                
+            // Close the removed controller    
+            case SDL_CONTROLLERDEVICEREMOVED: {
+                SDL_GameController* c = SDL_GameControllerFromInstanceID(e.cdevice.which);
+                printf("Game Controller Removed: %s.\n", SDL_GameControllerName(c));
+                SDL_GameControllerClose(c);
+                break;
             }
         }
     }
@@ -829,7 +841,6 @@ void ProcessEvent(SDL_Event* e, int* quit) {
 
 void ProcessNeko(SDL_Renderer* renderer) {
     int quit = 0; // Local quit flag
-    SDL_Event e;  // Local event structure
 
     // Game loop timing variables (for consistent animation speed)
     static Uint64 last_tick_time = 0; // Use static to retain value between calls
@@ -847,9 +858,11 @@ void ProcessNeko(SDL_Renderer* renderer) {
 
     printf("Entering main game loop within ProcessNeko.\n");
 
-    while (!quit) { // PATCH_HINT_Main_Game_Loop
+    while (!quit) {
         // Process SDL events
-        ProcessEvent(&e, &quit); // Pass address of local quit
+        ProcessEvent(&quit); // Pass address of local quit
+        if (quit)
+            break;
 
         // --- Game Logic Update (based on timing) ---
         current_tick_time = SDL_GetPerformanceCounter();
@@ -879,13 +892,6 @@ void DeInitAll(SDL_Window* window, SDL_Renderer* renderer) {
             SDL_DestroyTexture(BitmapTXDataTable[i].texture); // Use new table name
             BitmapTXDataTable[i].texture = NULL; // Use new table name
         }
-    }
-
-    // Close the game controller if it was opened
-    if (gGameController) {
-        SDL_GameControllerClose(gGameController);
-        gGameController = NULL;
-        printf("Game Controller closed.\n");
     }
 
     // Destroy the renderer
